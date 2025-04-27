@@ -19,7 +19,7 @@ const CreateProfile = () => {
     displayName: "",
     username: "",
     bio: "",
-    role: null as UserRole, // Fixed: Initialize with null instead of empty string
+    role: null as UserRole | null, // Fixed: Initialize with null instead of empty string
   });
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -30,7 +30,7 @@ const CreateProfile = () => {
         displayName: userProfile.displayName || "",
         username: userProfile.username || "",
         bio: userProfile.bio || "",
-        role: userProfile.role || "",
+        role: userProfile.role || null, // Use null as fallback instead of empty string
       });
     }
   }, [userProfile, profileLoading]);

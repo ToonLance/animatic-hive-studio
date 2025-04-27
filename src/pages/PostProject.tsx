@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, Calendar, DollarSign } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -38,6 +38,7 @@ const PostProject = () => {
     deadline: ""
   });
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -48,6 +49,14 @@ const PostProject = () => {
       ...prev,
       [name]: value
     }));
+    
+    // Clear error when field is edited
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ""
+      }));
+    }
   };
 
   const handleCategorySelection = (value: string) => {
@@ -62,6 +71,14 @@ const PostProject = () => {
           ...prev,
           category: [...prev.category, value]
         }));
+        
+        // Clear category error if any
+        if (errors.category) {
+          setErrors(prev => ({
+            ...prev,
+            category: ""
+          }));
+        }
       } else {
         toast({
           title: "Limit reached",
@@ -77,6 +94,54 @@ const PostProject = () => {
       ...prev,
       currency: value
     }));
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.title.trim()) {
+      newErrors.title = "Project title is required";
+    }
+    
+    if (!formData.description.trim()) {
+      newErrors.description = "Project description is required";
+    }
+    
+    if (!formData.requirements.trim()) {
+      newErrors.requirements = "Project requirements are required";
+    }
+    
+    if (formData.category.length === 0) {
+      newErrors.category = "Please select at least one category";
+    }
+    
+    const budgetMin = parseFloat(formData.budgetMin);
+    const budgetMax = parseFloat(formData.budgetMax);
+    
+    if (!formData.budgetMin || isNaN(budgetMin)) {
+      newErrors.budgetMin = "Please enter a valid minimum budget";
+    }
+    
+    if (!formData.budgetMax || isNaN(budgetMax)) {
+      newErrors.budgetMax = "Please enter a valid maximum budget";
+    }
+    
+    if (budgetMin > budgetMax) {
+      newErrors.budgetMin = "Minimum budget cannot be greater than maximum budget";
+    }
+    
+    if (formData.deadline) {
+      const selectedDate = new Date(formData.deadline);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (selectedDate < today) {
+        newErrors.deadline = "Deadline cannot be in the past";
+      }
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -102,17 +167,10 @@ const PostProject = () => {
       return;
     }
     
-    if (
-      !formData.title.trim() || 
-      !formData.description.trim() || 
-      !formData.requirements.trim() || 
-      formData.category.length === 0 || 
-      !formData.budgetMin || 
-      !formData.budgetMax
-    ) {
+    if (!validateForm()) {
       toast({
         title: "Error",
-        description: "Please fill out all required fields",
+        description: "Please fix the errors in the form",
         variant: "destructive",
       });
       return;
@@ -120,24 +178,6 @@ const PostProject = () => {
     
     const budgetMin = parseFloat(formData.budgetMin);
     const budgetMax = parseFloat(formData.budgetMax);
-    
-    if (isNaN(budgetMin) || isNaN(budgetMax)) {
-      toast({
-        title: "Error",
-        description: "Please enter valid budget amounts",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (budgetMin > budgetMax) {
-      toast({
-        title: "Error",
-        description: "Minimum budget cannot be greater than maximum budget",
-        variant: "destructive",
-      });
-      return;
-    }
     
     try {
       setLoading(true);
@@ -169,12 +209,24 @@ const PostProject = () => {
         description: "Project posted successfully",
       });
       
+      // Reset form
+      setFormData({
+        title: "",
+        description: "",
+        requirements: "",
+        category: [],
+        budgetMin: "",
+        budgetMax: "",
+        currency: "USD",
+        deadline: ""
+      });
+      
       navigate(`/projects/${projectRef.id}`);
     } catch (error) {
       console.error("Error posting project:", error);
       toast({
         title: "Error",
-        description: "Failed to post project",
+        description: "Failed to post project. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -196,7 +248,7 @@ const PostProject = () => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="title">Project Title</Label>
+              <Label htmlFor="title" className={errors.title ? "text-destructive" : ""}>Project Title</Label>
               <Input
                 id="title"
                 name="title"
@@ -204,11 +256,13 @@ const PostProject = () => {
                 value={formData.title}
                 onChange={handleInputChange}
                 disabled={loading}
+                className={errors.title ? "border-destructive" : ""}
               />
+              {errors.title && <p className="text-sm text-destructive">{errors.title}</p>}
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="description">Project Description</Label>
+              <Label htmlFor="description" className={errors.description ? "text-destructive" : ""}>Project Description</Label>
               <Textarea
                 id="description"
                 name="description"
@@ -217,11 +271,13 @@ const PostProject = () => {
                 onChange={handleInputChange}
                 rows={5}
                 disabled={loading}
+                className={errors.description ? "border-destructive" : ""}
               />
+              {errors.description && <p className="text-sm text-destructive">{errors.description}</p>}
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="requirements">Project Requirements</Label>
+              <Label htmlFor="requirements" className={errors.requirements ? "text-destructive" : ""}>Project Requirements</Label>
               <Textarea
                 id="requirements"
                 name="requirements"
@@ -230,11 +286,13 @@ const PostProject = () => {
                 onChange={handleInputChange}
                 rows={3}
                 disabled={loading}
+                className={errors.requirements ? "border-destructive" : ""}
               />
+              {errors.requirements && <p className="text-sm text-destructive">{errors.requirements}</p>}
             </div>
             
             <div className="space-y-2">
-              <Label>Project Categories (Select up to 3)</Label>
+              <Label className={errors.category ? "text-destructive" : ""}>Project Categories (Select up to 3)</Label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {ANIMATION_CATEGORIES.map((category) => (
                   <div key={category} className="flex items-center space-x-2">
@@ -252,11 +310,16 @@ const PostProject = () => {
                   </div>
                 ))}
               </div>
+              {errors.category && <p className="text-sm text-destructive">{errors.category}</p>}
             </div>
             
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="budgetMin">Minimum Budget</Label>
+                <Label htmlFor="budgetMin" className={errors.budgetMin ? "text-destructive" : ""}>
+                  <div className="flex items-center">
+                    <DollarSign className="h-4 w-4 mr-1" /> Minimum Budget
+                  </div>
+                </Label>
                 <Input
                   id="budgetMin"
                   name="budgetMin"
@@ -265,10 +328,16 @@ const PostProject = () => {
                   value={formData.budgetMin}
                   onChange={handleInputChange}
                   disabled={loading}
+                  className={errors.budgetMin ? "border-destructive" : ""}
                 />
+                {errors.budgetMin && <p className="text-sm text-destructive">{errors.budgetMin}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="budgetMax">Maximum Budget</Label>
+                <Label htmlFor="budgetMax" className={errors.budgetMax ? "text-destructive" : ""}>
+                  <div className="flex items-center">
+                    <DollarSign className="h-4 w-4 mr-1" /> Maximum Budget
+                  </div>
+                </Label>
                 <Input
                   id="budgetMax"
                   name="budgetMax"
@@ -277,7 +346,9 @@ const PostProject = () => {
                   value={formData.budgetMax}
                   onChange={handleInputChange}
                   disabled={loading}
+                  className={errors.budgetMax ? "border-destructive" : ""}
                 />
+                {errors.budgetMax && <p className="text-sm text-destructive">{errors.budgetMax}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="currency">Currency</Label>
@@ -301,7 +372,11 @@ const PostProject = () => {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="deadline">Project Deadline (Optional)</Label>
+              <Label htmlFor="deadline" className={errors.deadline ? "text-destructive" : ""}>
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-1" /> Project Deadline (Optional)
+                </div>
+              </Label>
               <Input
                 id="deadline"
                 name="deadline"
@@ -309,7 +384,9 @@ const PostProject = () => {
                 value={formData.deadline}
                 onChange={handleInputChange}
                 disabled={loading}
+                className={errors.deadline ? "border-destructive" : ""}
               />
+              {errors.deadline && <p className="text-sm text-destructive">{errors.deadline}</p>}
             </div>
             
             <Button type="submit" className="w-full" disabled={loading}>

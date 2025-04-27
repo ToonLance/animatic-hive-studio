@@ -72,12 +72,18 @@ const Messages = () => {
           variant: "destructive",
         });
         setLoading(false);
+        return () => {}; // Return empty function as fallback
       }
     };
     
-    const unsubscribe = fetchConversations();
+    const unsubscribePromise = fetchConversations();
     return () => {
-      unsubscribe?.then(unsub => unsub());
+      // Fixed: Handle the Promise correctly
+      unsubscribePromise.then(unsubFunc => {
+        if (typeof unsubFunc === 'function') {
+          unsubFunc();
+        }
+      }).catch(err => console.error("Error unsubscribing:", err));
     };
   }, [currentUser, navigate, toast]);
 
@@ -95,7 +101,7 @@ const Messages = () => {
             description: "User not found",
             variant: "destructive",
           });
-          return;
+          return null; // Return null instead of undefined
         }
         
         setRecipient(recipientSnap.data() as UserProfile);
@@ -137,14 +143,18 @@ const Messages = () => {
           description: "Failed to load conversation",
           variant: "destructive",
         });
-        return () => {}; // Return empty function to fix error
+        return () => {}; // Return empty function as fallback
       }
     };
     
-    const unsubscribe = fetchRecipient();
+    const unsubscribePromise = fetchRecipient();
     return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
+      if (unsubscribePromise) {
+        unsubscribePromise.then(unsubFunc => {
+          if (typeof unsubFunc === 'function') {
+            unsubFunc();
+          }
+        }).catch(err => console.error("Error unsubscribing:", err));
       }
     };
   }, [recipientId, currentUser, toast]);
@@ -173,13 +183,13 @@ const Messages = () => {
       const conversationSnap = await getDoc(conversationRef);
       
       if (conversationSnap.exists()) {
-        await updateDoc(conversationRef, { // Fixed: Using updateDoc instead of conversationSnap.ref.update
+        await updateDoc(conversationRef, {
           lastMessage: messageText,
           lastMessageDate: serverTimestamp(),
           participants: [currentUser.uid, recipient.uid]
         });
       } else {
-        await setDoc(conversationRef, { // Fixed: Using setDoc instead of conversationRef.set
+        await setDoc(conversationRef, {
           id: conversationId,
           participants: [currentUser.uid, recipient.uid],
           lastMessage: messageText,
