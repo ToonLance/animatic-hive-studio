@@ -7,12 +7,12 @@ import { getStorage } from "firebase/storage";
 // Your web app's Firebase configuration
 // Replace these with your actual Firebase config values
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || "AIzaSyDOCAbC123dEf456GhI789jKl01-MnO",
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || "animatichive.firebaseapp.com",
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || "animatichive",
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET || "animatichive.appspot.com",
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || "123456789012",
-  appId: process.env.REACT_APP_FIREBASE_APP_ID || "1:123456789012:web:a1b2c3d4e5f6abcdef1234"
+  apiKey: "AIzaSyA1YGFbDHDuSQVXFsRO-XD7Usir9dULoEU",
+  authDomain: "testing-dba79.firebaseapp.com",
+  projectId: "testing-dba79",
+  storageBucket: "testing-dba79.firebasestorage.app",
+  messagingSenderId: "808371260131",
+  appId: "1:808371260131:web:a59f409f532e617cba13d6"
 };
 
 // Initialize Firebase
