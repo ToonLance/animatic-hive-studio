@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,14 +15,13 @@ import {
   query, 
   where, 
   orderBy, 
-  limit, 
+  limit,
   onSnapshot,
   addDoc,
   serverTimestamp,
-  Timestamp,
   updateDoc,
   setDoc
-} from "firebase/firestore"; // Added updateDoc and setDoc
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { UserProfile, Message, Conversation } from "@/types";
 
@@ -45,47 +43,27 @@ const Messages = () => {
       return;
     }
     
-    // Fetch user's conversations
-    const fetchConversations = async () => {
-      try {
-        const q = query(
-          collection(db, "conversations"),
-          where("participants", "array-contains", currentUser.uid),
-          orderBy("lastMessageDate", "desc")
-        );
-        
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          const conversationsData: Conversation[] = [];
-          snapshot.forEach((doc) => {
-            conversationsData.push({ id: doc.id, ...doc.data() } as Conversation);
-          });
-          setConversations(conversationsData);
-          setLoading(false);
-        });
-        
-        return unsubscribe;
-      } catch (error) {
-        console.error("Error fetching conversations:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load conversations",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return () => {}; // Return empty function as fallback
-      }
-    };
+    const conversationsQuery = query(
+      collection(db, "conversations"),
+      where("participants", "array-contains", currentUser.uid),
+      orderBy("lastMessageDate", "desc")
+    );
     
-    const unsubscribePromise = fetchConversations();
-    return () => {
-      // Fixed: Handle the Promise correctly
-      unsubscribePromise.then(unsubFunc => {
-        if (typeof unsubFunc === 'function') {
-          unsubFunc();
-        }
-      }).catch(err => console.error("Error unsubscribing:", err));
-    };
-  }, [currentUser, navigate, toast]);
+    const unsubscribe = onSnapshot(conversationsQuery, (snapshot) => {
+      const conversationsData: Conversation[] = [];
+      snapshot.forEach((doc) => {
+        conversationsData.push({
+          id: doc.id,
+          ...doc.data(),
+          lastMessageDate: doc.data().lastMessageDate?.toDate() || new Date()
+        } as Conversation);
+      });
+      setConversations(conversationsData);
+      setLoading(false);
+    });
+    
+    return () => unsubscribe();
+  }, [currentUser, navigate]);
 
   useEffect(() => {
     if (!recipientId || !currentUser) return;
@@ -101,12 +79,11 @@ const Messages = () => {
             description: "User not found",
             variant: "destructive",
           });
-          return null; // Return null instead of undefined
+          return;
         }
         
         setRecipient(recipientSnap.data() as UserProfile);
         
-        // Check if conversation exists
         const conversationId = [currentUser.uid, recipientId].sort().join('_');
         
         const messagesQuery = query(
@@ -116,7 +93,7 @@ const Messages = () => {
           limit(50)
         );
         
-        const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+        return onSnapshot(messagesQuery, (snapshot) => {
           const messagesData: Message[] = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
@@ -128,14 +105,10 @@ const Messages = () => {
           });
           
           setMessages(messagesData);
-          
-          // Scroll to bottom after messages load
           setTimeout(() => {
             messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
           }, 100);
         });
-        
-        return unsubscribe;
       } catch (error) {
         console.error("Error fetching recipient:", error);
         toast({
@@ -143,18 +116,15 @@ const Messages = () => {
           description: "Failed to load conversation",
           variant: "destructive",
         });
-        return () => {}; // Return empty function as fallback
       }
     };
     
     const unsubscribePromise = fetchRecipient();
     return () => {
       if (unsubscribePromise) {
-        unsubscribePromise.then(unsubFunc => {
-          if (typeof unsubFunc === 'function') {
-            unsubFunc();
-          }
-        }).catch(err => console.error("Error unsubscribing:", err));
+        unsubscribePromise.then(unsubscribe => {
+          if (unsubscribe) unsubscribe();
+        });
       }
     };
   }, [recipientId, currentUser, toast]);
@@ -165,8 +135,7 @@ const Messages = () => {
     try {
       const conversationId = [currentUser.uid, recipient.uid].sort().join('_');
       
-      // Create message
-      await addDoc(collection(db, "messages"), {
+      const messageData = {
         conversationId,
         content: messageText,
         senderId: currentUser.uid,
@@ -176,32 +145,28 @@ const Messages = () => {
         read: false,
         createdAt: serverTimestamp(),
         attachments: []
-      });
+      };
       
-      // Update or create conversation document
+      await addDoc(collection(db, "messages"), messageData);
+      
       const conversationRef = doc(db, "conversations", conversationId);
       const conversationSnap = await getDoc(conversationRef);
       
+      const conversationData = {
+        id: conversationId,
+        participants: [currentUser.uid, recipient.uid],
+        lastMessage: messageText,
+        lastMessageDate: serverTimestamp(),
+        unreadCount: 1
+      };
+      
       if (conversationSnap.exists()) {
-        await updateDoc(conversationRef, {
-          lastMessage: messageText,
-          lastMessageDate: serverTimestamp(),
-          participants: [currentUser.uid, recipient.uid]
-        });
+        await updateDoc(conversationRef, conversationData);
       } else {
-        await setDoc(conversationRef, {
-          id: conversationId,
-          participants: [currentUser.uid, recipient.uid],
-          lastMessage: messageText,
-          lastMessageDate: serverTimestamp(),
-          unreadCount: 1
-        });
+        await setDoc(conversationRef, conversationData);
       }
       
-      // Clear input
       setMessageText("");
-      
-      // Scroll to bottom
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     } catch (error) {
       console.error("Error sending message:", error);

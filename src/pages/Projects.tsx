@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,9 +8,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, Plus, BriefcaseBusiness } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Project } from "@/types";
+import { useToast } from "@/components/ui/use-toast";
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -20,23 +20,19 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
+  // Updated to use real-time listener for projects
   useEffect(() => {
-    const fetchProjects = async () => {
+    const q = query(
+      collection(db, "projects"),
+      orderBy("createdAt", "desc")
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       try {
-        setLoading(true);
-        
-        // Get all open projects
-        const q = query(
-          collection(db, "projects"),
-          where("status", "==", "open"),
-          orderBy("createdAt", "desc")
-        );
-        
-        const querySnapshot = await getDocs(q);
-        
         const fetchedProjects: Project[] = [];
-        querySnapshot.forEach((doc) => {
+        snapshot.forEach((doc) => {
           fetchedProjects.push({
             id: doc.id,
             ...doc.data(),
@@ -47,15 +43,19 @@ const Projects = () => {
         
         setProjects(fetchedProjects);
         setFilteredProjects(fetchedProjects);
-      } catch (error) {
-        console.error("Error fetching projects:", error);
-      } finally {
         setLoading(false);
+      } catch (error) {
+        console.error("Error processing projects:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load projects",
+          variant: "destructive",
+        });
       }
-    };
+    });
     
-    fetchProjects();
-  }, []);
+    return () => unsubscribe();
+  }, [toast]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -100,6 +100,66 @@ const Projects = () => {
     navigate("/post-project");
   };
 
+  const renderProjects = (projectsToRender: Project[]) => {
+    if (projectsToRender.length === 0) {
+      return (
+        <div className="text-center py-20">
+          <BriefcaseBusiness className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-xl font-medium mb-2">No projects found</h3>
+          <p className="text-muted-foreground max-w-md mx-auto mb-6">
+            {searchQuery 
+              ? "No projects match your search criteria. Try with different keywords." 
+              : "There are no projects available right now. Check back later or create your own project."}
+          </p>
+          <Button onClick={handleCreateProject}>Post a Project</Button>
+        </div>
+      );
+    }
+  
+    return (
+      <div className="grid gap-6 md:grid-cols-2">
+        {projectsToRender.map((project) => (
+          <Link to={`/projects/${project.id}`} key={project.id}>
+            <Card className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer h-full">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="text-xl font-medium">{project.title}</h3>
+                  <Badge>{project.budget.currency} {project.budget.min}-{project.budget.max}</Badge>
+                </div>
+                
+                {project.category.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {project.category.map((cat, index) => (
+                      <Badge variant="outline" key={index}>{cat}</Badge>
+                    ))}
+                  </div>
+                )}
+                
+                <p className="text-muted-foreground mb-4 line-clamp-3">{project.description}</p>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={project.clientPhoto || undefined} />
+                      <AvatarFallback>{getInitials(project.clientName)}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm">{project.clientName}</span>
+                  </div>
+                  
+                  {project.deadline && (
+                    <div className="text-sm text-muted-foreground">
+                      Due: {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(project.deadline)}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="container max-w-6xl px-4 py-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -129,10 +189,23 @@ const Projects = () => {
       <Tabs defaultValue="all" className="mb-8">
         <TabsList>
           <TabsTrigger value="all">All Projects</TabsTrigger>
-          <TabsTrigger value="2d-animation">2D Animation</TabsTrigger>
-          <TabsTrigger value="character-design">Character Design</TabsTrigger>
-          <TabsTrigger value="motion-graphics">Motion Graphics</TabsTrigger>
+          <TabsTrigger value="open">Open</TabsTrigger>
+          <TabsTrigger value="in-progress">In Progress</TabsTrigger>
+          <TabsTrigger value="completed">Completed</TabsTrigger>
         </TabsList>
+        
+        <TabsContent value="all">
+          {renderProjects(filteredProjects)}
+        </TabsContent>
+        <TabsContent value="open">
+          {renderProjects(filteredProjects.filter(p => p.status === "open"))}
+        </TabsContent>
+        <TabsContent value="in-progress">
+          {renderProjects(filteredProjects.filter(p => p.status === "in-progress"))}
+        </TabsContent>
+        <TabsContent value="completed">
+          {renderProjects(filteredProjects.filter(p => p.status === "completed"))}
+        </TabsContent>
       </Tabs>
       
       {loading ? (
@@ -162,7 +235,9 @@ const Projects = () => {
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start mb-3">
                     <h3 className="text-xl font-medium">{project.title}</h3>
-                    <Badge>{project.budget.currency} {project.budget.min}-{project.budget.max}</Badge>
+                    <Badge variant={project.status === "open" ? "default" : "secondary"}>
+                      {project.status}
+                    </Badge>
                   </div>
                   
                   {project.category.length > 0 && (
@@ -184,11 +259,9 @@ const Projects = () => {
                       <span className="text-sm">{project.clientName}</span>
                     </div>
                     
-                    {project.deadline && (
-                      <div className="text-sm text-muted-foreground">
-                        Due: {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(project.deadline)}
-                      </div>
-                    )}
+                    <div className="text-sm font-medium">
+                      {project.budget.currency} {project.budget.min}-{project.budget.max}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
