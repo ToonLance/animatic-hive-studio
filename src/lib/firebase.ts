@@ -5,6 +5,7 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
+// Replace these with your actual Firebase config values
 const firebaseConfig = {
   apiKey: "AIzaSyDOCAbC123dEf456GhI789jKl01-MnO",
   authDomain: "animatichive.firebaseapp.com",

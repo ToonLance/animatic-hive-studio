@@ -20,8 +20,10 @@ import {
   onSnapshot,
   addDoc,
   serverTimestamp,
-  Timestamp
-} from "firebase/firestore";
+  Timestamp,
+  updateDoc,
+  setDoc
+} from "firebase/firestore"; // Added updateDoc and setDoc
 import { db } from "@/lib/firebase";
 import { UserProfile, Message, Conversation } from "@/types";
 
@@ -135,6 +137,7 @@ const Messages = () => {
           description: "Failed to load conversation",
           variant: "destructive",
         });
+        return () => {}; // Return empty function to fix error
       }
     };
     
@@ -170,13 +173,13 @@ const Messages = () => {
       const conversationSnap = await getDoc(conversationRef);
       
       if (conversationSnap.exists()) {
-        await conversationSnap.ref.update({
+        await updateDoc(conversationRef, { // Fixed: Using updateDoc instead of conversationSnap.ref.update
           lastMessage: messageText,
           lastMessageDate: serverTimestamp(),
           participants: [currentUser.uid, recipient.uid]
         });
       } else {
-        await conversationRef.set({
+        await setDoc(conversationRef, { // Fixed: Using setDoc instead of conversationRef.set
           id: conversationId,
           participants: [currentUser.uid, recipient.uid],
           lastMessage: messageText,

@@ -19,7 +19,7 @@ const CreateProfile = () => {
     displayName: "",
     username: "",
     bio: "",
-    role: "" as UserRole,
+    role: null as UserRole, // Fixed: Initialize with null instead of empty string
   });
   const navigate = useNavigate();
   const { toast } = useToast();
